@@ -4,6 +4,7 @@ defmodule PlaywrightEx.FrameEventRecorder do
 
   alias PlaywrightEx.Connection
   alias PlaywrightEx.FrameWaiter
+  alias PlaywrightEx.GuidRouter
 
   @waiter_grace_ms 100
   @frame_detached_error "Navigating frame was detached!"
@@ -39,6 +40,9 @@ defmodule PlaywrightEx.FrameEventRecorder do
 
   @spec ensure_started(atom(), PlaywrightEx.guid(), initializer() | nil) :: {:ok, pid()} | {:error, map()}
   def ensure_started(connection, frame_id, initializer \\ nil) do
+    # Recorders are registered per connection; resolve the one owning the frame.
+    connection = GuidRouter.route(frame_id, connection)
+
     case lookup(connection, frame_id) do
       {:ok, pid} ->
         {:ok, pid}
@@ -167,7 +171,7 @@ defmodule PlaywrightEx.FrameEventRecorder do
 
   @spec terminate_frame(atom(), PlaywrightEx.guid()) :: :ok
   def terminate_frame(connection, frame_id) do
-    case lookup(connection, frame_id) do
+    case lookup(GuidRouter.route(frame_id, connection), frame_id) do
       {:ok, pid} -> Process.exit(pid, :normal)
       :not_found -> :ok
     end

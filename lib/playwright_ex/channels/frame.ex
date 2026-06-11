@@ -608,7 +608,7 @@ defmodule PlaywrightEx.Frame do
     {connection, opts} = opts |> PlaywrightEx.Channel.validate_known!(@schema) |> Keyword.pop!(:connection)
     {timeout, opts} = Keyword.pop!(opts, :timeout)
 
-    params = opts |> Map.new() |> maybe_convert_to_payloads(connection)
+    params = opts |> Map.new() |> maybe_convert_to_payloads(PlaywrightEx.GuidRouter.route(frame_id, connection))
 
     connection
     |> Connection.send(%{guid: frame_id, method: :set_input_files, params: params}, timeout)

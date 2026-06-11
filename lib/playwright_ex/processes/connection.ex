@@ -12,6 +12,7 @@ defmodule PlaywrightEx.Connection do
   import Kernel, except: [send: 2]
 
   alias PlaywrightEx.FrameEventRecorder
+  alias PlaywrightEx.GuidRouter
 
   @timeout_grace_factor 1.5
   @min_genserver_timeout to_timeout(second: 1)
@@ -38,14 +39,14 @@ defmodule PlaywrightEx.Connection do
   Subscribe to messages for a guid.
   """
   def subscribe(name, pid \\ self(), guid) do
-    :gen_statem.cast(name, {:subscribe, pid, guid})
+    :gen_statem.cast(GuidRouter.route(guid, name), {:subscribe, pid, guid})
   end
 
   @doc """
   Unsubscribe from messages for a guid.
   """
   def unsubscribe(name, pid \\ self(), guid) do
-    :gen_statem.cast(name, {:unsubscribe, pid, guid})
+    :gen_statem.cast(GuidRouter.route(guid, name), {:unsubscribe, pid, guid})
   end
 
   @doc false
@@ -56,8 +57,11 @@ defmodule PlaywrightEx.Connection do
   @doc """
   Post a message and await the response.
   Wait for an additional grace period after the playwright timeout.
+
+  The message is routed to the connection that owns `msg.guid`
+  (see `PlaywrightEx.GuidRouter`), falling back to `name`.
   """
-  def send(name, %{guid: _, method: _} = msg, timeout) when is_integer(timeout) do
+  def send(name, %{guid: guid, method: _} = msg, timeout) when is_integer(timeout) do
     msg =
       msg
       |> Enum.into(%{params: %{}, metadata: %{}})
@@ -66,14 +70,14 @@ defmodule PlaywrightEx.Connection do
 
     call_timeout = max(@min_genserver_timeout, round(timeout * @timeout_grace_factor))
 
-    :gen_statem.call(name, {:send, msg}, call_timeout)
+    :gen_statem.call(GuidRouter.route(guid, name), {:send, msg}, call_timeout)
   end
 
   @doc """
   Get the initializer data for a channel.
   """
   def initializer!(name, guid) do
-    :gen_statem.call(name, {:initializer, guid})
+    :gen_statem.call(GuidRouter.route(guid, name), {:initializer, guid})
   end
 
   @doc """
@@ -176,6 +180,7 @@ defmodule PlaywrightEx.Connection do
   end
 
   defp handle_create(data, %{method: :__create__} = msg) do
+    GuidRouter.put(msg.params.guid, data.config.name)
     put_in(data.initializers[msg.params.guid], msg.params.initializer)
   end
 
@@ -196,6 +201,8 @@ defmodule PlaywrightEx.Connection do
   defp maybe_start_frame_event_recorder(data, _msg), do: data
 
   defp handle_dispose(data, %{method: :__dispose__} = msg) do
+    GuidRouter.delete(msg.guid)
+
     data
     |> Map.update!(:initializers, &Map.delete(&1, msg.guid))
     |> stop_disposed_frame_event_recorder(msg.guid)

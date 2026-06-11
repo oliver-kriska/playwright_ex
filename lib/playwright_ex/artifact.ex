@@ -31,6 +31,7 @@ defmodule PlaywrightEx.Artifact do
   def save_as(artifact_guid, path, opts \\ []) do
     {connection, opts} = opts |> PlaywrightEx.Channel.validate_known!(@schema) |> Keyword.pop!(:connection)
     {timeout, _opts} = Keyword.pop!(opts, :timeout)
+    connection = PlaywrightEx.GuidRouter.route(artifact_guid, connection)
 
     if Connection.remote?(connection) do
       save_as_stream(connection, artifact_guid, timeout, path)

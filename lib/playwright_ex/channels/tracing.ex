@@ -136,6 +136,7 @@ defmodule PlaywrightEx.Tracing do
           {:ok, %{guid: PlaywrightEx.guid(), absolute_path: Path.t()}} | {:error, any()}
   def tracing_stop_chunk(tracing_id, opts \\ []) do
     {connection, opts} = opts |> PlaywrightEx.Channel.validate_known!(@schema) |> Keyword.pop!(:connection)
+    connection = PlaywrightEx.GuidRouter.route(tracing_id, connection)
     {timeout, opts} = Keyword.pop!(opts, :timeout)
 
     with {:ok, artifact} <-
